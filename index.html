@@ -6,48 +6,123 @@
 <style>
 body{
 	position: fixed;
-	top: 0px; left: 0px; right: 0px; bottom: 20px;
-	background-color: #222244;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
 	margin: 0;
 	padding: 0;
+	font-size: 12px;
 }
 #editor{
-	width: 100%;
-	height: 100%;
+	position: fixed;
 	resize: none;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 2em;
 	margin: 0;
 	border: 0 none;
 }
-#status{
+#bottom{
 	position: fixed;
 	left: 0;
 	right: 0;
 	bottom: 0;
+	height: 2em;
 	color: white;
-	font-size: 12px;
 	margin: 0;
-	padding: 4px;
+	padding-left: 1ex;
+	line-height: 2em;
+	background-color: #222244;
+}
+#buttons{
+	position: absolute;
+	right: 0;
+}
+#buttons > button{
+	line-height: 2em;
 }
 </style>
 <script src="//ajaxorg.github.io/ace-builds/src-min-noconflict/ace.js"></script>
+<script src="//zaach.github.io/jsonlint/jsonlint.js"></script>
 <script>
 window.addEventListener("DOMContentLoaded", function(){
 	var status = document.querySelector("#status");
 	var defaultStatus = status.textContent;
 	var editor = ace.edit("editor");
-	editor.setTheme("ace/theme/twilight");
+	var errorLine = /line ([0-9]+)/;
+	var formatted = false;
+	editor.setTheme("ace/theme/terminal");
 	editor.getSession().setMode("ace/mode/json");
-	editor.on("paste", function(e){
+	editor.getSession().setUseWrapMode(true);
+	editor.setShowPrintMargin(false);
+	function prettify(t){
+		if(formatted || editor.getValue().length == 0){
+			return;
+		}
 		try{
-			e.text = JSON.stringify(JSON.parse(e.text), null, "\t");
+			var json = jsonlint.parse(editor.getValue());
+			if(json){
+				setTimeout(function(){
+					formatted = true;
+					editor.setValue(JSON.stringify(json, null, t));
+					formatted = false;
+				}, 100);
+			}
 			status.textContent = defaultStatus;
 		}
-		catch(e){
-			status.textContent = e.toString();
+		catch(ex){
+			var d = ex.toString().split("\n");
+			var m = d[0].match(errorLine);
+			if(m){
+				var l = parseInt(m[1]) - 1;
+				var p = editor.getSession().getLine(l).indexOf(d[1].substring(3));
+				if(p < 0){
+					p = 0;
+				}
+				else{
+					p += d[2].length - 4;
+				}
+				setTimeout(function(){
+					editor.gotoLine(l + 1, p);
+				}, 100);
+			}
+			status.textContent = "ERROR: " + d[3];
+			setTimeout(function(){
+				alert(d[0] + " " + d[3]);
+				editor.focus();
+			}, 100);
 		}
+	}
+	editor.commands.addCommand({
+		name: "format",
+		bindKey: {
+			win: "Ctrl-Shift-F",
+			mac: "Command-Shift-F"
+		},
+		exec: function(editor) {
+			prettify("\t");
+		}
+    });
+	editor.commands.addCommand({
+		name: "minify",
+		bindKey: {
+			win: "Ctrl-Shift-M",
+			mac: "Command-Shift-M"
+		},
+		exec: function(editor) {
+			prettify("");
+		}
+    });
+	document.querySelector("#format").addEventListener("click", function(e){
+		prettify("\t");
+	});
+	document.querySelector("#minify").addEventListener("click", function(e){
+		prettify("");
 	});
 });
 </script>
 </head>
-<body><div id="editor"></div><p id="status">Ready</p></body>
+<body><div id="editor"></div><div id="bottom"><div id="buttons"><button id="format">Lint &amp; Format (Ctrl/⌘-Shift-F)</button> <button id="minify">Lint &amp; Minify (Ctrl/⌘-Shift-M)</button></div><label id="status">Ready</label></div></body>
 </html>
